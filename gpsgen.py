@@ -100,15 +100,6 @@ class Step():
         return vars(self.worker)
 
 
-def gen_result(step):
-    """Returns a list with the complete simulation"""
-    pass
-
-def gen_next_step(step):
-    """Return one step, for streaming or whatever"""
-    pass
-
-
 class Simulation():
     """This wants to be a base class for different simulation modes
     like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
@@ -129,4 +120,14 @@ class RealtimeSimulation(Simulation):
 
     def gen_stream(self):
         pass
+
+
+#considering moving this two next functions to main as an interface to the simulation
+def gen_result(step):
+    """Returns a list with the complete simulation"""
+    pass
+
+def gen_next_step(step):
+    """Return one step, for streaming or whatever"""
+    pass
 
