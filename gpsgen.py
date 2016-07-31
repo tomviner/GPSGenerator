@@ -110,10 +110,10 @@ def gen_next_step(step):
 
 
 class Simulation():
-    """This wasnt to be a base class for different simulation modes
+    """This wants to be a base class for different simulation modes
     like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
     illusion)
-    We also add some metadata to the simulation like start ans end datetime"""
+    We also add some metadata to the simulation like start and end datetime"""
     def __init__(self):
         self.starts = datetime.datetime.now()
         self.ends = None
