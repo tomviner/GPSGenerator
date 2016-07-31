@@ -1,6 +1,7 @@
 from itertools import cycle, count
 import datetime
 from collections import namedtuple
+import numpy as np
 
 
 CARRIERS = 600
@@ -22,14 +23,11 @@ CITIES = [
         }
 ]
 
-states = cycle(['free','to_provider','to_customer'])
 
 worker_sequence = count(start=1, step=1)
 
 task_sequence = count(start=1, step=1)
 
-def next_state():
-    return next(states)
 
 def next_worker_id():
     return next(worker_sequence)
@@ -56,6 +54,8 @@ class Task():
 
 
 class Worker():
+    states = ['free','to_provider','to_customer']
+
     def __init__(self, worker_id, city, coord, task_id, state='free'):
         """In this proof of concept every Worker has a ACTION linked even if it is
         <Free>, as well as the a last coord, gps coordinates for displaying 
@@ -64,9 +64,11 @@ class Worker():
         self.worker_id = worker_id
         self.coord = coord
         self.city = city
-        self.state = state
+        self.state_machine = cycle(self.states)
+        self.current_state = state
         self.task_id = task_id
         self.speed = np.array((0,0))
+        self.trigger_state_generator()
 
 
     def _get_id(self):
@@ -77,8 +79,14 @@ class Worker():
         redis(GEOADD)."""
         return "{city}:{worker_id}:{task_id}"
 
+    def trigger_state_generator(self):
+        """Just semantic alias to start the generator(cycle)"""
+        self.current_state = next(self.state_machine)
+        return
+
     def switch_state(self):
-        self.state = next_state()
+        self.current_state = next(self.state_machine)
+        return 
 
     def get_position(self):
         return self.coord
