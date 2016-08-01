@@ -1,28 +1,41 @@
 from itertools import cycle, count
 import datetime
-from collections import namedtuple
+from collections import namedtuple, deque
+import random, time, json
+
+
 import numpy as np
+import pyproj
 
 
-CARRIERS = 600
+CARRIERS = 30
 AVG_SPEED = 13.8 # m/s +- 50 km/h
+AVG_SPEED_TUPLE = tuple([-13.8,13.8]) 
 START_TIME = datetime.datetime.now()
+GPS_TRANSMIT_RATE = 15 #seconds
+HOURS_PER_SHIFT = 8
 
 Coord = namedtuple("Coord", ["lat","lon"])
 
-CITIES = [
-        {
+"""[To improve] this is just a helper data structure"""
+CITIES = {
+        "LON": {
             "name": "LONDON",
-            "code": "LON",
-            "initial_point": Coord(-0.1202201, 51.517235)
+            "initial_point": Coord(-0.1202201, 51.517235),
+            "proj_map": "epsg:27700"
         },
-        {
+        "MAD": {
             "name": "MADRID",
-            "code": "MAD",
-            "initial_point": Coord(-3.707429, 40.415369)
+            "initial_point": Coord(-3.707429, 40.415369),
+            "proj_map": "epsg:2062"
         }
-]
+}
 
+"""[To improve] this is just a helper data structure"""
+MapProj = {
+        "LON": pyproj.Proj(init=CITIES["LON"]["proj_map"]),
+        "MAD": pyproj.Proj(init=CITIES["MAD"]["proj_map"])
+}
 
 worker_sequence = count(start=1, step=1)
 
@@ -57,10 +70,12 @@ class Worker():
     states = ['free','to_provider','to_customer']
 
     def __init__(self, worker_id, city, coord, task_id, state='free'):
-        """In this proof of concept every Worker has a ACTION linked even if it is
-        <Free>, as well as the a last coord, gps coordinates for displaying 
+        """
+        In this proof of concept every Worker has a ACTION linked even if it
+        is <Free>, as well as the a last coord, gps coordinates for displaying 
         the last valid position for the worker.
-        Speed is a vector np array it allow us to multiply matrixes"""
+        Speed is a vector np array it allow us to multiply matrixes
+        """
         self.worker_id = worker_id
         self.coord = coord
         self.city = city
@@ -68,19 +83,17 @@ class Worker():
         self.current_state = state
         self.task_id = task_id
         self.speed = np.array((0,0))
+        self.mapConvert = MapProj[self.city]
         self.trigger_state_generator()
 
 
     def _get_id(self):
         return self.worker_id
 
-    def full_qualified_id():
-        """This is the full qualified id, that wwe will use as key on
-        redis(GEOADD)."""
-        return "{city}:{worker_id}:{task_id}"
-
     def trigger_state_generator(self):
-        """Just semantic alias to start the generator(cycle)"""
+        """
+        Just semantic alias to start the generator(cycle)
+        """
         self.current_state = next(self.state_machine)
         return
 
@@ -91,20 +104,46 @@ class Worker():
     def get_position(self):
         return self.coord
 
+    def __str__(self):
+        return "{city} -> {worker_id} {task_id} {coord}".format(**vars(self))
+
 
 class Step():
-    def __init__(self, worker):
+    def __init__(self, worker,start_date=None):
         self.worker = worker
+        if start_date is not None:
+            self.time = start_date
+        else:
+            self.time = datetime.datetime.now()
+        self.rate = datetime.timedelta(seconds=GPS_TRANSMIT_RATE)
+
 
     def to_dict(self):
         return vars(self.worker)
 
+    def full_qualified_id(self):
+        """
+        This is the full qualified id, that wwe will use as key on
+        redis(GEOADD).
+        """
+        return "{city}:{worker_id}:{task_id}".format(**self.to_dict())
+
+    def __str__(self):
+        step_data  =  (self.full_qualified_id(),
+                       self.worker.current_state,
+                       self.worker.coord,
+                       self.time)
+        return "[<STEP> for {}] [<ACTION>:{}] [<COORD>:{}] [<TIME>: {}]".format(*step_data)
+
+
 
 class Simulation():
-    """This wants to be a base class for different simulation modes
+    """
+    This wants to be a base class for different simulation modes
     like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
     illusion)
-    We also add some metadata to the simulation like start and end datetime"""
+    We also add some metadata to the simulation like start and end datetime
+    """
     def __init__(self):
         self.starts = datetime.datetime.now()
         self.ends = None
@@ -122,12 +161,28 @@ class RealtimeSimulation(Simulation):
         pass
 
 
-#considering moving this two next functions to main as an interface to the simulation
-def gen_result(step):
-    """Returns a list with the complete simulation"""
+city_switcher = cycle(CITIES.keys())
+
+#considering moving this two next functions to main to handle the simulation
+def next_step(step, timeIncrement):
     pass
 
-def gen_next_step(step):
-    """Return one step, for streaming or whatever"""
+
+def process_step_timeline(step, city):
     pass
 
+class StepScheduler():
+    def __init__(self):
+        self._step_queue = deque()
+
+    def new_step(self, step):
+        self._step_queue.append(step)
+
+    def run(self):
+        while self._step_queue:
+            step = self._step_queue.popleft()
+            try:
+                next(step)
+                self._step_queue.append(step)
+            except StopIteration:
+                pass
