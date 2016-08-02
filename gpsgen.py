@@ -165,11 +165,32 @@ city_switcher = cycle(CITIES.keys())
 
 #considering moving this two next functions to main to handle the simulation
 def next_step(step, timeIncrement):
-    pass
+    worker = step.worker
+    worker.speed = np.array((random.uniform(-13.8,13.8),
+                             random.uniform(-13.8,13.8)))
+    lon, lat = worker.coord
+    position = np.array(worker.mapConvert(lon, lat))
+    position += worker.speed * (timeIncrement.total_seconds())
+    lon, lat = worker.mapConvert(position[0], position[1], inverse = True)
+    worker.coord = Coord(lon, lat)
+    step.time += timeIncrement
 
 
 def process_step_timeline(step, city):
-    pass
+    for tik in range(0, int(HOURS_PER_SHIFT * 60 * 60 / GPS_TRANSMIT_RATE)):
+        """
+        # if <store to file> flag
+        # send to store
+        # or send to a stream
+        # or both
+        * Think also in a way to freeze the next execution, only in case of
+        simulating "real time streaming"
+        """
+        print (step)
+        yield
+        step.worker.city = city
+        next_step(step, step.rate)
+
 
 class StepScheduler():
     def __init__(self):
@@ -186,3 +207,21 @@ class StepScheduler():
                 self._step_queue.append(step)
             except StopIteration:
                 pass
+# ok this is a mess, but well,, the interface for this craziness took only
+# 10 lines of code
+# [remenber] you need to think a way to schedule the <ACTIONS> change (odds)
+# see you tomorrow
+sched = StepScheduler()
+simulation_start_date= datetime.datetime(2016,4,25,8,0,0)
+for carrier in range(0 , (CARRIERS * len(CITIES))):
+        city = next(city_switcher)
+        initial_w = Worker(next_worker_id(),
+             city,
+             CITIES[city]['initial_point'],
+             next_task_id())
+        s = Step(initial_w, start_date= simulation_start_date)
+        # s = Step(initial_w)
+        sched.new_step(process_step_timeline(s, city))
+
+
+sched.run()
