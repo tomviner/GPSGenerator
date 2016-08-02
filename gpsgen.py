@@ -8,12 +8,12 @@ import numpy as np
 import pyproj
 
 
-CARRIERS = 30
+CARRIERS = 600
 AVG_SPEED = 13.8 # m/s +- 50 km/h
 AVG_SPEED_TUPLE = tuple([-13.8,13.8]) 
 START_TIME = datetime.datetime.now()
 GPS_TRANSMIT_RATE = 15 #seconds
-HOURS_PER_SHIFT = 8
+HOURS_PER_SHIFT = 24
 
 Coord = namedtuple("Coord", ["lat","lon"])
 
@@ -65,9 +65,25 @@ class Task():
     def __init__(self):
         self.task_id = next_task_id()
 
+"""
+I will change the state machine to iterate over this namedtuples, in which I 
+will store 1/10 to change odds to change next state. Quick dirty solution.
+I also will store the code, for a posibble representation in a redis key
+"""
+Free = namedtuple("Free", ['odds', 'code'])
+ToProvider = namedtuple("ToProvider", ['odds', 'code'])
+ToCustomer = namedtuple("ToCustomer", ['odds', 'code'])
+"""
+## Instantiation for the class variable, lets start thinking this odds will be
+inmutable, thats why i stored them in a namedtuple,  want to keep this data 
+structure tight, quick and dirty again.
+"""
+free = Free(6,0) # this means 6/100 chances to change to --> ToProvider state
+to_provider = ToProvider(2,1) # 6/100 chances to change to --> ToCustomer state
+to_customer = ToCustomer(2,2) # 6/100 chances to change to --> Free state
 
 class Worker():
-    states = ['free','to_provider','to_customer']
+    states = [free, to_provider, to_customer]
 
     def __init__(self, worker_id, city, coord, task_id, state='free'):
         """
@@ -164,6 +180,7 @@ class RealtimeSimulation(Simulation):
 city_switcher = cycle(CITIES.keys())
 
 #considering moving this two next functions to main to handle the simulation
+
 def next_step(step, timeIncrement):
     worker = step.worker
     worker.speed = np.array((random.uniform(-13.8,13.8),
@@ -174,6 +191,12 @@ def next_step(step, timeIncrement):
     lon, lat = worker.mapConvert(position[0], position[1], inverse = True)
     worker.coord = Coord(lon, lat)
     step.time += timeIncrement
+    if worker.current_state.odds >= random.randint(1,100):
+        if isinstance(worker.current_state, Free):
+            worker.task_id = next_task_id()
+        worker.switch_state()
+
+
 
 
 def process_step_timeline(step, city):
