@@ -4,6 +4,7 @@ GPS tracking simulation for a Carrier-Workers coordination Company
 Introduction
 -----------------
 This a small simulator for generating gps coordinates, simulating a fleet of carriers or workers within a big city.
+
 Objective
 -------------
 The main objective for this script is to have a flexible, easy to use and customizable stream of gps corrdinates.
