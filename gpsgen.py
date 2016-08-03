@@ -67,7 +67,7 @@ class Task():
 
 """
 I will change the state machine to iterate over this namedtuples, in which I 
-will store 1/10 to change odds to change next state. Quick dirty solution.
+will store 1/100 to change odds to change next state. Quick dirty solution.
 I also will store the code, for a posibble representation in a redis key
 """
 Free = namedtuple("Free", ['odds', 'code'])
