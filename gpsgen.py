@@ -66,9 +66,9 @@ class Task():
         self.task_id = next_task_id()
 
 """
-I will change the state machine to iterate over this namedtuples, in which I 
+I changed the state machine to iterate over this namedtuples, in which I 
 will store 1/100 to change odds to change next state. Quick dirty solution.
-I also will store the code, for a posibble representation in a redis key
+I also stored the code, for a posibble representation in a redis key
 """
 Free = namedtuple("Free", ['odds', 'code'])
 ToProvider = namedtuple("ToProvider", ['odds', 'code'])
@@ -79,8 +79,9 @@ inmutable, thats why i stored them in a namedtuple,  want to keep this data
 structure tight, quick and dirty again.
 """
 free = Free(6,0) # this means 6/100 chances to change to --> ToProvider state
-to_provider = ToProvider(2,1) # 6/100 chances to change to --> ToCustomer state
-to_customer = ToCustomer(2,2) # 6/100 chances to change to --> Free state
+to_provider = ToProvider(2,1) # 2/100 chances to change to --> ToCustomer state
+to_customer = ToCustomer(2,2) # 2/100 chances to change to --> Free state
+
 
 class Worker():
     states = [free, to_provider, to_customer]
@@ -125,6 +126,12 @@ class Worker():
 
 
 class Step():
+    """
+    This is 1to1 wrapper to a Worker, not only for semantics, a Silumation
+    has Steps not workers, but also for adding some data not related to a
+    Step like gps track transmit rate.
+    The start_date is the reference data from which next step is processed
+    """
     def __init__(self, worker,start_date=None):
         self.worker = worker
         if start_date is not None:
@@ -178,6 +185,9 @@ class Simulation():
     like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
     illusion)
     We also add some metadata to the simulation like start and end datetime
+
+    **Note considering simplifying this to just one Simulation class, with no 
+    subclasses
     """
     def __init__(self, start_date=None):
         if start_date is None:
@@ -212,6 +222,7 @@ class Simulation():
             # or both
             * Think also in a way to freeze the next execution, only in case of
             simulating "real time streaming"
+            for now just print it to stdout
             """
             print (step)
             yield
