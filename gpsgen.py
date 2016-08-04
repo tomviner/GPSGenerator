@@ -195,10 +195,11 @@ class Simulation():
     **Note considering simplifying this to just one Simulation class, with no 
     subclasses
     """
-    def __init__(self, sim_type, nworkers, speed, transmit_rate,
-                 start_date=None):
+    def __init__(self, sim_type, nworkers, h_per_shift, speed,
+                     transmit_rate, start_date=None):
         self.sim_type = sim_type
         self.nworkers = nworkers
+        self.h_per_shift = h_per_shift
         self.speed = speed
         self.transmit_rate = transmit_rate # seconds int
         self.rate = datetime.timedelta(seconds=transmit_rate) #datetime obj
@@ -237,7 +238,7 @@ class Simulation():
         """Watch this!!! you need a transmit rate in seconds(int) here, not the
         datetime object. store this value after argument parsing or default
         """
-        for _ in range(0, int(HOURS_PER_SHIFT * 60 * 60 / self.transmit_rate)):
+        for _ in range(0, int(self.h_per_shift * 60*60 / self.transmit_rate)):
             """
             # if <store to file> flag
             # send to store
@@ -288,6 +289,12 @@ def valid_date(s):
         msg = "Not a valid date: '{0}'.".format(s)
         raise argparse.ArgumentTypeError(msg)
 
+def valid_hours(s):
+    hours = int(s)
+    if not (1 <= hours <= 24):
+        msg = "Hours must be between 1 and 24"
+        raise argparse.ArgumentTypeError(msg)
+    return hours
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="gpsgen",
@@ -314,6 +321,15 @@ if __name__ == "__main__":
                         help="Speed workers are continously moving\n"
                              "Unit: m/s\n"
                              "Default: %(default)s m/s")
+
+    parser.add_argument('-hs', '--h-per-shift',
+                        type=valid_hours,
+                        default=24,
+                        action="store",
+                        dest="h_per_shift",
+                        help="Hours per shift, the worker drives\n"
+                             "Unit: int\n"
+                             "Default: %(default)s")
 
     parser.add_argument('-tr', '--transmit-rate',
                         type=int,
@@ -342,6 +358,7 @@ if __name__ == "__main__":
 
     simulation = Simulation(args.sim_type,
                             args.nworkers,
+                            args.h_per_shift,
                             args.speed,
                             args.transmit_rate,
                             start_date=args.start_date)
