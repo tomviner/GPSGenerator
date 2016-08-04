@@ -2,7 +2,8 @@ from itertools import cycle, count
 import datetime
 from collections import namedtuple, deque
 import random, time, json
-
+import argparse
+from argparse import RawTextHelpFormatter
 
 import numpy as np
 import pyproj
@@ -194,20 +195,26 @@ class Simulation():
     **Note considering simplifying this to just one Simulation class, with no 
     subclasses
     """
-    def __init__(self, transmit_rate, start_date=None):
+    def __init__(self, sim_type, nworkers, speed, transmit_rate,
+                 start_date=None):
+        self.sim_type = sim_type
+        self.nworkers = nworkers
+        self.speed = speed
+        self.transmit_rate = transmit_rate # seconds int
+        self.rate = datetime.timedelta(seconds=transmit_rate) #datetime obj
         if start_date is None:
             self.starts = datetime.datetime.now()
         else:
             self.starts = start_date
         self.ends = None
         self.steps = []
-        self.rate = datetime.timedelta(seconds=transmit_rate)
         self.scheduler = StepScheduler()
+        self.database = None # redis server
 
     def next_step(self, step, timeIncrement):
         worker = step.worker
-        worker.speed = np.array((random.uniform(-13.8,13.8),
-                                random.uniform(-13.8,13.8)))
+        worker.speed = np.array((random.uniform(-(self.speed),self.speed),
+                                random.uniform(-(self.speed),self.speed)))
         lon, lat = worker.coord
         position = np.array(worker.mapConvert(lon, lat))
         position += worker.speed * (timeIncrement.total_seconds())
@@ -230,7 +237,7 @@ class Simulation():
         """Watch this!!! you need a transmit rate in seconds(int) here, not the
         datetime object. store this value after argument parsing or default
         """
-        for tik in range(0, int(HOURS_PER_SHIFT * 60 * 60 / GPS_TRANSMIT_RATE)):
+        for _ in range(0, int(HOURS_PER_SHIFT * 60 * 60 / self.transmit_rate)):
             """
             # if <store to file> flag
             # send to store
@@ -269,11 +276,73 @@ class RealtimeSimulation(Simulation):
     def gen_stream(self):
         pass
 
+def default_date():
+    return  datetime.datetime.now()
+
+# Validators
+def valid_date(s):
+    try:
+        date = datetime.datetime.strptime(s, "%Y-%m-%d")
+        return date.replace(hour=8,minute=0)
+    except ValueError:
+        msg = "Not a valid date: '{0}'.".format(s)
+        raise argparse.ArgumentTypeError(msg)
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog="gpsgen",
+                                     description="GPS Stream generator",
+                                     formatter_class=RawTextHelpFormatter)
+    parser.add_argument('sim_type',
+                        choices=['live', 'file', 'both'],
+                        help="Select a type of simulation to execute\n")
 
-    simulation_start_date = datetime.datetime(2016,4,25,8,0,0)
-    
-    simulation = Simulation(GPS_TRANSMIT_RATE, start_date=simulation_start_date)
+    parser.add_argument('-nw', '--nworkers',
+                        type=int,
+                        default=600,
+                        action="store",
+                        dest="nworkers",
+                        help="Number of Workers per city.\n"
+                             "Unit: %(type)s\n"
+                             "Default: %(default)s")
+
+    parser.add_argument('-s', '--speed',
+                        type=float,
+                        default=13.8,
+                        action="store",
+                        dest="speed",
+                        help="Speed workers are continously moving\n"
+                             "Unit: m/s\n"
+                             "Default: %(default)s m/s")
+
+    parser.add_argument('-tr', '--transmit-rate',
+                        type=int,
+                        default=15,
+                        action="store",
+                        dest="transmit_rate",
+                        help="GPS tracking transmit rate in seconds\n"
+                             "Unit: seconds\n"
+                             "Default: %(default)s s")
+
+    parser.add_argument('-d', '--start-date',
+                        type=valid_date,
+                        default=default_date(),
+                        action="store",
+                        dest="start_date",
+                        help="Start date for the simulation\n"
+                             "Format: YYYY-MM-DD\n"
+                             "Default: NOW")
+
+    parser.add_argument('--version',
+                        action='version',
+                        version='%(prog)s 0.1.0')
+
+
+    args = parser.parse_args()
+
+    simulation = Simulation(args.sim_type,
+                            args.nworkers,
+                            args.speed,
+                            args.transmit_rate,
+                            start_date=args.start_date)
     simulation.start()
-
