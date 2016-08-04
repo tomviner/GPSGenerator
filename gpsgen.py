@@ -4,9 +4,12 @@ from collections import namedtuple, deque
 import random, time, json
 import argparse
 from argparse import RawTextHelpFormatter
+import time
 
 import numpy as np
 import pyproj
+import redis
+from redis.exceptions import WatchError
 
 
 Coord = namedtuple("Coord", ["lat","lon"])
@@ -53,7 +56,7 @@ Not sure about this
 could be interesting, using it as
 >>> task = Task(next_task_id())
 Task = namedtuple("Task", ['task_id'])
-**Note currently not using this, if we dont need no sync to a real database, 
+**Note currently not using this, if we dont need no sync to a real database,
 lets keep this, unused.
 """
 
@@ -62,7 +65,7 @@ class Task():
         self.task_id = next_task_id()
 
 """
-I changed the state machine to iterate over this namedtuples, in which I 
+I changed the state machine to iterate over this namedtuples, in which I
 will store 1/100 to change odds to change next state. Quick dirty solution.
 I also stored the code, for a posibble representation in a redis key
 """
@@ -71,7 +74,7 @@ ToProvider = namedtuple("ToProvider", ['odds', 'code'])
 ToCustomer = namedtuple("ToCustomer", ['odds', 'code'])
 """
 ## Instantiation for the class variable, lets start thinking this odds will be
-inmutable, thats why i stored them in a namedtuple,  want to keep this data 
+inmutable, thats why i stored them in a namedtuple,  want to keep this data
 structure tight, quick and dirty again.
 """
 free = Free(6,0) # this means 6/100 chances to change to --> ToProvider state
@@ -85,7 +88,7 @@ class Worker():
     def __init__(self, worker_id, city, coord, task_id, state='free'):
         """
         In this proof of concept every Worker has a ACTION linked even if it
-        is <Free>, as well as the a last coord, gps coordinates for displaying 
+        is <Free>, as well as the a last coord, gps coordinates for displaying
         the last valid position for the worker.
         Speed is a vector np array it allow us to multiply matrixes
         """
@@ -112,7 +115,7 @@ class Worker():
 
     def switch_state(self):
         self.current_state = next(self.state_machine)
-        return 
+        return
 
     def get_position(self):
         return self.coord
@@ -183,12 +186,11 @@ class Simulation():
     like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
     illusion)
     We also add some metadata to the simulation like start and end datetime
-
-    **Note considering simplifying this to just one Simulation class, with no 
+    **Note considering simplifying this to just one Simulation class, with no
     subclasses
     """
     def __init__(self, sim_type, nworkers, h_per_shift, speed,
-                     transmit_rate, start_date=None):
+                     transmit_rate, start_date=None, database=None):
         self.sim_type = sim_type
         self.nworkers = nworkers
         self.h_per_shift = h_per_shift
@@ -200,9 +202,34 @@ class Simulation():
         else:
             self.starts = start_date
         self.ends = None
-        self.steps = []
         self.scheduler = StepScheduler()
-        self.database = None # redis server
+        self.database = database # redis server
+        self.filewriter = self.file_writer_coro()
+
+
+    def send_to_db_coro(self, step):
+        while True:
+            data = yield
+            if data is None:
+                break
+            key = data.full_qualified_id()
+            lon, lat = step.worker.coord
+            t = str(int(time.time()))
+            values = (lon, lat, t)
+            self.database.execute_command("GEOADD", key, *values)
+
+    def start_db_coro(self, step):
+            to_redis = self.send_to_db_coro(step)
+            next(to_redis)
+            to_redis.send(step)
+
+    def file_writer_coro(self):
+        with open('data.dat', 'wt') as f:
+            while True:
+                line = yield
+                if line is None:
+                    break
+                print(str(line), file=f)
 
     def next_step(self, step, timeIncrement):
         worker = step.worker
@@ -229,44 +256,37 @@ class Simulation():
     def process_step_timeline(self, step, city):
         for _ in range(0, int(self.h_per_shift * 60*60 / self.transmit_rate)):
             """
-            # if <store to file> flag
-            # send to store
-            # or send to a stream
-            # or both
-            * Think also in a way to freeze the next execution, only in case of
-            simulating "real time streaming"
-            for now just print it to stdout
-
-            Lets start with the live streaming to redis local server.
+            Explain this in a propper way...
             """
-            print (step)
+            if self.sim_type == "live":
+                self.start_db_coro(step)
+            if self.sim_type == "file":
+                self.filewriter.send(step)
+            if self.sim_type == "both":
+                self.start_db_coro(step)
+                self.filewriter.send(step)
             yield
             step.worker.city = city
             self.next_step(step, self.rate)
 
     def start(self):
+        if self.sim_type in ["file","both"]:
+            """Initialize filewriter coro"""
+            next(self.filewriter)
         for carrier in range(0 , (self.nworkers * len(CITIES))):
             city = next(city_switcher)
             initial_w = Worker(next_worker_id(),
-                city,
-                CITIES[city]['initial_point'],
-                0)
+                               city,
+                               CITIES[city]['initial_point'],
+                               0)
             s = Step(initial_w, start_date=self.starts)
             self.scheduler.new_step(self.process_step_timeline(s, city))
         self.scheduler.run()
+        from inspect import getgeneratorstate
+        if getgeneratorstate(self.filewriter) == 'GEN_RUNNING':
+            """Not completelly sure if this will happend"""
+            self.filewriter.send(None)
 
-
-#Considering not using thissubclasses...
-class ToJsonFileSimulation(Simulation):
-
-    def add_step(self, step):
-        self.steps.append(step)
-
-
-class RealtimeSimulation(Simulation):
-
-    def gen_stream(self):
-        pass
 
 def default_date():
     return  datetime.datetime.now()
@@ -347,10 +367,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    r = redis.StrictRedis(host='localhost', port=6379, db=0)
+
     simulation = Simulation(args.sim_type,
                             args.nworkers,
                             args.h_per_shift,
                             args.speed,
                             args.transmit_rate,
-                            start_date=args.start_date)
+                            start_date=args.start_date,
+                            database=r)
     simulation.start()
