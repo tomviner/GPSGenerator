@@ -41,6 +41,8 @@ worker_sequence = count(start=1, step=1)
 
 task_sequence = count(start=1, step=1)
 
+city_switcher = cycle(CITIES.keys())
+
 
 def next_worker_id():
     return next(worker_sequence)
@@ -127,10 +129,11 @@ class Worker():
 
 class Step():
     """
-    This is 1to1 wrapper to a Worker, not only for semantics, a Silumation
-    has Steps not workers, but also for adding some data not related to a
-    Step like gps track transmit rate.
-    The start_date is the reference data from which next step is processed
+    This is 1 to 1 wrapper to a Worker, not only for semantics, a Silumation
+    has Steps not workers, but also for adding the initial step data like
+    start_date.
+    The start_date is the reference date from which next step is processed
+    Worker instance is manipulated from Step too.
     """
     def __init__(self, worker,start_date=None):
         self.worker = worker
@@ -138,7 +141,6 @@ class Step():
             self.time = start_date
         else:
             self.time = datetime.datetime.now()
-        self.rate = datetime.timedelta(seconds=GPS_TRANSMIT_RATE)
 
 
     def to_dict(self):
@@ -146,8 +148,12 @@ class Step():
 
     def full_qualified_id(self):
         """
-        This is the full qualified id, that wwe will use as key on
+        This is the full qualified id, that we will use as key on
         redis(GEOADD).
+        **Note add a day reference to this, This way web can manage Courier
+        data in redis like a session. Lets see which is the best format for
+        this get_current_day() first class function is for this. Consider also
+        adding this function as a class member.
         """
         return "{city}:{worker_id}:{task_id}".format(**self.to_dict())
 
@@ -157,9 +163,6 @@ class Step():
                        self.worker.coord,
                        self.time)
         return "[<STEP> for {}] [<ACTION>:{}] [<COORD>:{}] [<TIME>: {}]".format(*step_data)
-
-
-city_switcher = cycle(CITIES.keys())
 
 
 class StepScheduler():
@@ -189,13 +192,14 @@ class Simulation():
     **Note considering simplifying this to just one Simulation class, with no 
     subclasses
     """
-    def __init__(self, start_date=None):
+    def __init__(self, transmit_rate, start_date=None):
         if start_date is None:
             self.starts = datetime.datetime.now()
         else:
             self.starts = start_date
         self.ends = None
         self.steps = []
+        self.rate = datetime.timedelta(seconds=transmit_rate)
         self.scheduler = StepScheduler()
 
     def next_step(self, step, timeIncrement):
@@ -214,6 +218,9 @@ class Simulation():
             worker.switch_state()
 
     def process_step_timeline(self, step, city):
+        """Watch this!!! you need a transmit rate in seconds(int) here, not the
+        datetime object. store this value after argument parsing or default
+        """
         for tik in range(0, int(HOURS_PER_SHIFT * 60 * 60 / GPS_TRANSMIT_RATE)):
             """
             # if <store to file> flag
@@ -227,7 +234,7 @@ class Simulation():
             print (step)
             yield
             step.worker.city = city
-            self.next_step(step, step.rate)
+            self.next_step(step, self.rate)
 
     def start(self):
         for carrier in range(0 , (CARRIERS * len(CITIES))):
@@ -258,6 +265,6 @@ if __name__ == "__main__":
 
     simulation_start_date= datetime.datetime(2016,4,25,8,0,0)
     
-    simulation = Simulation(start_date=simulation_start_date)
+    simulation = Simulation(GPS_TRANSMIT_RATE, start_date=simulation_start_date)
     simulation.start()
 
