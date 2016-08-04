@@ -9,7 +9,6 @@ import time
 import numpy as np
 import pyproj
 import redis
-from redis.exceptions import WatchError
 
 
 Coord = namedtuple("Coord", ["lat","lon"])
