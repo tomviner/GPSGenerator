@@ -61,6 +61,8 @@ Not sure about this
 could be interesting, using it as
 >>> task = Task(next_task_id())
 Task = namedtuple("Task", ['task_id'])
+**Note currently not using this, if we dont need no sync to a real database, 
+lets keep this, unused.
 """
 
 class Task():
