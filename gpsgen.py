@@ -9,16 +9,8 @@ import numpy as np
 import pyproj
 
 
-CARRIERS = 600
-AVG_SPEED = 13.8 # m/s +- 50 km/h
-AVG_SPEED_TUPLE = tuple([-13.8,13.8]) 
-START_TIME = datetime.datetime.now()
-GPS_TRANSMIT_RATE = 15 #seconds
-HOURS_PER_SHIFT = 24
-
 Coord = namedtuple("Coord", ["lat","lon"])
 
-"""[To improve] this is just a helper data structure"""
 CITIES = {
         "LON": {
             "name": "LONDON",
@@ -32,7 +24,6 @@ CITIES = {
         }
 }
 
-"""[To improve] this is just a helper data structure"""
 MapProj = {
         "LON": pyproj.Proj(init=CITIES["LON"]["proj_map"]),
         "MAD": pyproj.Proj(init=CITIES["MAD"]["proj_map"])
@@ -165,7 +156,8 @@ class Step():
                        self.worker.current_state,
                        self.worker.coord,
                        self.time)
-        return "[<STEP> for {}] [<ACTION>:{}] [<COORD>:{}] [<TIME>: {}]".format(*step_data)
+        f_string = "[<STEP> for {}] [<ACTION>:{}] [<COORD>:{}] [<TIME>: {}]"
+        return f_string.format(*step_data)
 
 
 class StepScheduler():
@@ -254,7 +246,7 @@ class Simulation():
             self.next_step(step, self.rate)
 
     def start(self):
-        for carrier in range(0 , (CARRIERS * len(CITIES))):
+        for carrier in range(0 , (self.nworkers * len(CITIES))):
             city = next(city_switcher)
             initial_w = Worker(next_worker_id(),
                 city,
