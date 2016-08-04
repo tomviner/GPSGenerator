@@ -215,6 +215,13 @@ class Simulation():
         if worker.current_state.odds >= random.randint(1,100):
             if isinstance(worker.current_state, Free):
                 worker.task_id = next_task_id()
+            if isinstance(worker.current_state, ToCustomer):
+                """This means next state is free
+                task id zero will be the representation of a free of duty
+                courier
+                Maybe its better to put a string like "FREE for that"
+                """
+                worker.task_id = 0
             worker.switch_state()
 
     def process_step_timeline(self, step, city):
@@ -242,7 +249,7 @@ class Simulation():
             initial_w = Worker(next_worker_id(),
                 city,
                 CITIES[city]['initial_point'],
-                next_task_id())
+                0)
             s = Step(initial_w, start_date=self.starts)
             self.scheduler.new_step(self.process_step_timeline(s, city))
         self.scheduler.run()
@@ -263,7 +270,7 @@ class RealtimeSimulation(Simulation):
 
 if __name__ == "__main__":
 
-    simulation_start_date= datetime.datetime(2016,4,25,8,0,0)
+    simulation_start_date = datetime.datetime(2016,4,25,8,0,0)
     
     simulation = Simulation(GPS_TRANSMIT_RATE, start_date=simulation_start_date)
     simulation.start()
