@@ -227,9 +227,6 @@ class Simulation():
             worker.switch_state()
 
     def process_step_timeline(self, step, city):
-        """Watch this!!! you need a transmit rate in seconds(int) here, not the
-        datetime object. store this value after argument parsing or default
-        """
         for _ in range(0, int(self.h_per_shift * 60*60 / self.transmit_rate)):
             """
             # if <store to file> flag
@@ -239,6 +236,8 @@ class Simulation():
             * Think also in a way to freeze the next execution, only in case of
             simulating "real time streaming"
             for now just print it to stdout
+
+            Lets start with the live streaming to redis local server.
             """
             print (step)
             yield
