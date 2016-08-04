@@ -152,67 +152,7 @@ class Step():
         return "[<STEP> for {}] [<ACTION>:{}] [<COORD>:{}] [<TIME>: {}]".format(*step_data)
 
 
-
-class Simulation():
-    """
-    This wants to be a base class for different simulation modes
-    like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
-    illusion)
-    We also add some metadata to the simulation like start and end datetime
-    """
-    def __init__(self):
-        self.starts = datetime.datetime.now()
-        self.ends = None
-        self.steps = []
-
-class ToJsonFileSimulation(Simulation):
-
-    def add_step(self, step):
-        self.steps.append(step)
-
-
-class RealtimeSimulation(Simulation):
-
-    def gen_stream(self):
-        pass
-
-
 city_switcher = cycle(CITIES.keys())
-
-#considering moving this two next functions to main to handle the simulation
-
-def next_step(step, timeIncrement):
-    worker = step.worker
-    worker.speed = np.array((random.uniform(-13.8,13.8),
-                             random.uniform(-13.8,13.8)))
-    lon, lat = worker.coord
-    position = np.array(worker.mapConvert(lon, lat))
-    position += worker.speed * (timeIncrement.total_seconds())
-    lon, lat = worker.mapConvert(position[0], position[1], inverse = True)
-    worker.coord = Coord(lon, lat)
-    step.time += timeIncrement
-    if worker.current_state.odds >= random.randint(1,100):
-        if isinstance(worker.current_state, Free):
-            worker.task_id = next_task_id()
-        worker.switch_state()
-
-
-
-
-def process_step_timeline(step, city):
-    for tik in range(0, int(HOURS_PER_SHIFT * 60 * 60 / GPS_TRANSMIT_RATE)):
-        """
-        # if <store to file> flag
-        # send to store
-        # or send to a stream
-        # or both
-        * Think also in a way to freeze the next execution, only in case of
-        simulating "real time streaming"
-        """
-        print (step)
-        yield
-        step.worker.city = city
-        next_step(step, step.rate)
 
 
 class StepScheduler():
@@ -230,21 +170,83 @@ class StepScheduler():
                 self._step_queue.append(step)
             except StopIteration:
                 pass
-# ok this is a mess, but well,, the interface for this craziness took only
-# 10 lines of code
-# [remenber] you need to think a way to schedule the <ACTIONS> change (odds)
-# see you tomorrow
-sched = StepScheduler()
-simulation_start_date= datetime.datetime(2016,4,25,8,0,0)
-for carrier in range(0 , (CARRIERS * len(CITIES))):
-        city = next(city_switcher)
-        initial_w = Worker(next_worker_id(),
-             city,
-             CITIES[city]['initial_point'],
-             next_task_id())
-        s = Step(initial_w, start_date= simulation_start_date)
-        # s = Step(initial_w)
-        sched.new_step(process_step_timeline(s, city))
 
 
-sched.run()
+class Simulation():
+    """
+    This wants to be a base class for different simulation modes
+    like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
+    illusion)
+    We also add some metadata to the simulation like start and end datetime
+    """
+    def __init__(self, start_date=None):
+        if start_date is None:
+            self.starts = datetime.datetime.now()
+        else:
+            self.starts = start_date
+        self.ends = None
+        self.steps = []
+        self.scheduler = StepScheduler()
+
+    def next_step(self, step, timeIncrement):
+        worker = step.worker
+        worker.speed = np.array((random.uniform(-13.8,13.8),
+                                random.uniform(-13.8,13.8)))
+        lon, lat = worker.coord
+        position = np.array(worker.mapConvert(lon, lat))
+        position += worker.speed * (timeIncrement.total_seconds())
+        lon, lat = worker.mapConvert(position[0], position[1], inverse = True)
+        worker.coord = Coord(lon, lat)
+        step.time += timeIncrement
+        if worker.current_state.odds >= random.randint(1,100):
+            if isinstance(worker.current_state, Free):
+                worker.task_id = next_task_id()
+            worker.switch_state()
+
+    def process_step_timeline(self, step, city):
+        for tik in range(0, int(HOURS_PER_SHIFT * 60 * 60 / GPS_TRANSMIT_RATE)):
+            """
+            # if <store to file> flag
+            # send to store
+            # or send to a stream
+            # or both
+            * Think also in a way to freeze the next execution, only in case of
+            simulating "real time streaming"
+            """
+            print (step)
+            yield
+            step.worker.city = city
+            self.next_step(step, step.rate)
+
+    def start(self):
+        for carrier in range(0 , (CARRIERS * len(CITIES))):
+            city = next(city_switcher)
+            initial_w = Worker(next_worker_id(),
+                city,
+                CITIES[city]['initial_point'],
+                next_task_id())
+            s = Step(initial_w, start_date=self.starts)
+            self.scheduler.new_step(self.process_step_timeline(s, city))
+        self.scheduler.run()
+
+
+#Considering not using thissubclasses...
+class ToJsonFileSimulation(Simulation):
+
+    def add_step(self, step):
+        self.steps.append(step)
+
+
+class RealtimeSimulation(Simulation):
+
+    def gen_stream(self):
+        pass
+
+
+if __name__ == "__main__":
+
+    simulation_start_date= datetime.datetime(2016,4,25,8,0,0)
+    
+    simulation = Simulation(start_date=simulation_start_date)
+    simulation.start()
+
