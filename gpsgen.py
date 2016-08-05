@@ -179,6 +179,18 @@ class StepScheduler():
                 pass
 
 
+class RedisConnection():
+    """A context manager to conect to local redis server"""
+    def __init__(self, location, port, db=None):
+        seld.location = location
+        self.port = port
+        seld.db = db
+
+    def __enter__(self):
+        r = redis.StrictRedis(host=self.location, port=int(port), db=int(db))
+
+
+
 class Simulation():
     """
     This wants to be a base class for different simulation modes
@@ -204,23 +216,23 @@ class Simulation():
         self.scheduler = StepScheduler()
         self.database = database # redis server
         self.filewriter = self.file_writer_coro()
+        self.dbwriter = self.send_to_db_coro()
 
 
-    def send_to_db_coro(self, step):
+    def send_to_db_coro(self):
         while True:
             data = yield
             if data is None:
                 break
             key = data.full_qualified_id()
-            lon, lat = step.worker.coord
-            t = str(int(time.time()))
+            lon, lat = data.worker.coord
+            t = str(time.time())
             values = (lon, lat, t)
             self.database.execute_command("GEOADD", key, *values)
 
-    def start_db_coro(self, step):
-            to_redis = self.send_to_db_coro(step)
-            next(to_redis)
-            to_redis.send(step)
+    def start_db_coro(self):
+            to_redis = self.send_to_db_coro()
+            return next(to_redis)
 
     def file_writer_coro(self):
         with open('data.dat', 'wt') as f:
@@ -258,11 +270,11 @@ class Simulation():
             Explain this in a propper way...
             """
             if self.sim_type == "live":
-                self.start_db_coro(step)
+                self.dbwriter.send(step)
             if self.sim_type == "file":
                 self.filewriter.send(step)
             if self.sim_type == "both":
-                self.start_db_coro(step)
+                self.dbwriter.send(step)
                 self.filewriter.send(step)
             yield
             step.worker.city = city
@@ -272,6 +284,9 @@ class Simulation():
         if self.sim_type in ["file","both"]:
             """Initialize filewriter coro"""
             next(self.filewriter)
+        if self.sim_type in ['live','both']:
+            """Initialize dbwriter coro"""
+            next(self.dbwriter)
         for carrier in range(0 , (self.nworkers * len(CITIES))):
             city = next(city_switcher)
             initial_w = Worker(next_worker_id(),
@@ -281,7 +296,11 @@ class Simulation():
             s = Step(initial_w, start_date=self.starts)
             self.scheduler.new_step(self.process_step_timeline(s, city))
         self.scheduler.run()
+        """Delete this after checkin coroutines end properly"""
         from inspect import getgeneratorstate
+        if getgeneratorstate(self.filewriter) == 'GEN_RUNNING':
+            """Not completelly sure if this will happend"""
+            self.filewriter.send(None)
         if getgeneratorstate(self.filewriter) == 'GEN_RUNNING':
             """Not completelly sure if this will happend"""
             self.filewriter.send(None)
