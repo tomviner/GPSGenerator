@@ -181,12 +181,10 @@ class StepScheduler():
 
 class Simulation():
     """
-    This wants to be a base class for different simulation modes
-    like ToJsonFileSimulation or RealtimeSimulation (ok real time is always an
-    illusion)
-    We also add some metadata to the simulation like start and end datetime
-    **Note considering simplifying this to just one Simulation class, with no
-    subclasses
+    This is the main class of this script. It configures the simulation, starts
+    the necesary coroutines, and starts the scheduler in which theare are
+    stored the main generator(freezed), generator thar triggers each coroutine
+    when required. Add More ...
     """
     def __init__(self, sim_type, nworkers, h_per_shift, speed,
                      transmit_rate, start_date=None, database=None):
