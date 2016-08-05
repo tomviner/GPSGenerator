@@ -194,7 +194,8 @@ class Simulation():
     when required. Add More ...
     """
     def __init__(self, sim_type, nworkers, h_per_shift, speed,
-                     transmit_rate, is_json, is_pretty, start_date=None, database=None):
+                     transmit_rate, is_json, is_pretty, start_date=None,
+                     database=None):
         self.sim_type = sim_type
         self.nworkers = nworkers
         self.h_per_shift = h_per_shift
