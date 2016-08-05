@@ -179,18 +179,6 @@ class StepScheduler():
                 pass
 
 
-class RedisConnection():
-    """A context manager to conect to local redis server"""
-    def __init__(self, location, port, db=None):
-        seld.location = location
-        self.port = port
-        seld.db = db
-
-    def __enter__(self):
-        r = redis.StrictRedis(host=self.location, port=int(port), db=int(db))
-
-
-
 class Simulation():
     """
     This wants to be a base class for different simulation modes
