@@ -68,17 +68,17 @@ I changed the state machine to iterate over this namedtuples, in which I
 will store 1/100 to change odds to change next state. Quick dirty solution.
 I also stored the code, for a posibble representation in a redis key
 """
-Free = namedtuple("Free", ['odds', 'code'])
-ToProvider = namedtuple("ToProvider", ['odds', 'code'])
-ToCustomer = namedtuple("ToCustomer", ['odds', 'code'])
+Free = namedtuple("Free", ['odds', 'code', 'name'])
+ToProvider = namedtuple("ToProvider", ['odds', 'code', 'name'])
+ToCustomer = namedtuple("ToCustomer", ['odds', 'code', 'name'])
 """
 ## Instantiation for the class variable, lets start thinking this odds will be
 inmutable, thats why i stored them in a namedtuple,  want to keep this data
 structure tight, quick and dirty again.
 """
-free = Free(6,0) # this means 6/100 chances to change to --> ToProvider state
-to_provider = ToProvider(2,1) # 2/100 chances to change to --> ToCustomer state
-to_customer = ToCustomer(2,2) # 2/100 chances to change to --> Free state
+free = Free(6,0,'free') # this means 6/100 chances to change to --> ToProvider state
+to_provider = ToProvider(2,1,'to_provider') # 2/100 chances to change to --> ToCustomer state
+to_customer = ToCustomer(2,2,'to_customer') # 2/100 chances to change to --> Free state
 
 
 class Worker():
@@ -153,6 +153,13 @@ class Step():
         """
         return "{city}:{worker_id}:{task_id}".format(**self.to_dict())
 
+    def to_json_line(self):
+        return {'id': self.full_qualified_id(),
+                'state': self.worker.current_state.name,
+                'coord': [self.worker.coord.lat, self.worker.coord.lon],
+                'timestamp': float(time.mktime(self.time.timetuple()))
+                }
+
     def __str__(self):
         step_data  =  (self.full_qualified_id(),
                        self.worker.current_state,
@@ -187,13 +194,15 @@ class Simulation():
     when required. Add More ...
     """
     def __init__(self, sim_type, nworkers, h_per_shift, speed,
-                     transmit_rate, start_date=None, database=None):
+                     transmit_rate, is_json, is_pretty, start_date=None, database=None):
         self.sim_type = sim_type
         self.nworkers = nworkers
         self.h_per_shift = h_per_shift
         self.speed = speed
         self.transmit_rate = transmit_rate # seconds int
         self.rate = datetime.timedelta(seconds=transmit_rate) #datetime obj
+        self.is_json_file = any([is_json, is_pretty])
+        self.is_pretty = is_pretty
         if start_date is None:
             self.starts = datetime.datetime.now()
         else:
@@ -201,9 +210,21 @@ class Simulation():
         self.ends = None
         self.scheduler = StepScheduler()
         self.database = database # redis server
-        self.filewriter = self.file_writer_coro()
+        if self.is_json_file:
+            self.filewriter = self.file_writer_to_json_coro()
+        else:
+            self.filewriter = self.file_writer_coro()
         self.dbwriter = self.send_to_db_coro()
 
+    @property
+    def metadata(self):
+        return {'start_date': str(self.starts),
+                'end_date': None,
+                'simulation_type': self.sim_type}
+
+    def produce_json_structure(self):
+        return {'metadata': self.metadata,
+                'data': []}
 
     def send_to_db_coro(self):
         while True:
@@ -227,6 +248,26 @@ class Simulation():
                 if line is None:
                     break
                 print(str(line), file=f)
+
+    def file_writer_to_json_coro(self):
+        with open('data.json', 'w+') as f:
+            json_object = self.produce_json_structure()
+            while True:
+                line = yield
+                if line is None:
+                    break
+                json_object['data'].append(line.to_json_line())
+            if self.is_pretty:
+                f.write(json.dumps(json_object, indent=4))
+            else:
+                f.write(json.dumps(json_object))
+
+    def end_coroutines(self, coros):
+        for coro in coros:
+            try:
+                coro.send(None)
+            except StopIteration:
+                pass
 
     def next_step(self, step, timeIncrement):
         worker = step.worker
@@ -282,16 +323,10 @@ class Simulation():
             s = Step(initial_w, start_date=self.starts)
             self.scheduler.new_step(self.process_step_timeline(s, city))
         self.scheduler.run()
-        """Delete this after checkin coroutines end properly"""
-        from inspect import getgeneratorstate
-        if getgeneratorstate(self.filewriter) == 'GEN_RUNNING':
-            """Not completelly sure if this will happend"""
-            self.filewriter.send(None)
-        if getgeneratorstate(self.filewriter) == 'GEN_RUNNING':
-            """Not completelly sure if this will happend"""
-            self.filewriter.send(None)
+        self.end_coroutines([self.filewriter, self.dbwriter])
+        
 
-
+#helperS
 def default_date():
     return  datetime.datetime.now()
 
@@ -315,11 +350,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="gpsgen",
                                      description="GPS Stream generator",
                                      formatter_class=RawTextHelpFormatter)
-    parser.add_argument('sim_type',
+    parser.add_argument("sim_type",
                         choices=['live', 'file', 'both'],
                         help="Select a type of simulation to execute\n")
 
-    parser.add_argument('-nw', '--nworkers',
+    parser.add_argument("-nw", "--nworkers",
                         type=int,
                         default=600,
                         action="store",
@@ -328,7 +363,7 @@ if __name__ == "__main__":
                              "Unit: %(type)s\n"
                              "Default: %(default)s")
 
-    parser.add_argument('-s', '--speed',
+    parser.add_argument("-s", "--speed",
                         type=float,
                         default=13.8,
                         action="store",
@@ -337,7 +372,7 @@ if __name__ == "__main__":
                              "Unit: m/s\n"
                              "Default: %(default)s m/s")
 
-    parser.add_argument('-hs', '--h-per-shift',
+    parser.add_argument("-hs", "--h-per-shift",
                         type=valid_hours,
                         default=24,
                         action="store",
@@ -346,7 +381,7 @@ if __name__ == "__main__":
                              "Unit: int\n"
                              "Default: %(default)s")
 
-    parser.add_argument('-tr', '--transmit-rate',
+    parser.add_argument("-tr", "--transmit-rate",
                         type=int,
                         default=15,
                         action="store",
@@ -355,7 +390,7 @@ if __name__ == "__main__":
                              "Unit: seconds\n"
                              "Default: %(default)s s")
 
-    parser.add_argument('-d', '--start-date',
+    parser.add_argument("-d", "--start-date",
                         type=valid_date,
                         default=default_date(),
                         action="store",
@@ -364,12 +399,33 @@ if __name__ == "__main__":
                              "Format: YYYY-MM-DD\n"
                              "Default: NOW")
 
-    parser.add_argument('--version',
-                        action='version',
+    parser.add_argument("-j", "--json",
+                        default=False,
+                        action="store_true",
+                        help="Write the file in json format compressed\n")
+
+    parser.add_argument("-pj", "--pretty-json",
+                        dest="pretty",
+                        default=False,
+                        action="store_true",
+                        help="Write the file in json format\n"
+                             "Indented 4 spaces\n")
+
+
+    parser.add_argument("--version",
+                        action="version",
                         version='%(prog)s 0.1.0')
 
 
     args = parser.parse_args()
+
+    if args.sim_type == "live" and (args.json or args.pretty):
+        msg = "Live simulation and json flag is not compatible"
+        raise argparse.ArgumentTypeError(msg)
+
+    if args.json and args.pretty:
+        msg = "Choose between --json or --pretty-json, not both"
+        raise argparse.ArgumentTypeError(msg)
 
     r = redis.StrictRedis(host='localhost', port=6379, db=0)
 
@@ -378,6 +434,8 @@ if __name__ == "__main__":
                             args.h_per_shift,
                             args.speed,
                             args.transmit_rate,
+                            args.json,
+                            args.pretty,
                             start_date=args.start_date,
                             database=r)
     simulation.start()
