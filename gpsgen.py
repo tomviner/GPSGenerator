@@ -1,3 +1,4 @@
+import sys
 from itertools import cycle, count
 import datetime
 from collections import namedtuple, deque
@@ -354,9 +355,9 @@ class Simulation():
             self.scheduler.run()
             self.end_io_coroutines()
         except (KeyboardInterrupt, SystemExit):
-            print("\nClosing all files properly....")
+            sys.stdout.write("\nClosing all files properly....")
             self.end_io_coroutines()
-            print("Files closed.")
+            sys.stdout.write("\nFiles closed.\n")
 
 #helperS
 def default_date():
