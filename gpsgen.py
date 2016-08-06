@@ -285,7 +285,7 @@ class Simulation():
                 line = yield
                 if line is None:
                     break
-                f.write(str(line))
+                f.write(str(line) + "\n")
 
     @io_coroutine
     def file_writer_to_json(self):
