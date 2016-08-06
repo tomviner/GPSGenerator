@@ -53,10 +53,9 @@ def get_current_day():
 
 
 """
-Not sure about this
-could be interesting, using it as
->>> task = Task(next_task_id())
+Not sure about this could be interesting, using it as
 Task = namedtuple("Task", ['task_id'])
+>>> task = Task(next_task_id())
 **Note currently not using this, if we dont need no sync to a real database,
 lets keep this, unused.
 """
@@ -68,14 +67,14 @@ class Task():
 """
 I changed the state machine to iterate over this namedtuples, in which I
 will store 1/100 to change odds to change next state. Quick dirty solution.
-I also stored the code, for a posibble representation in a redis key
+I also stored the code and a name for a posible representation in a redis key
 """
 Free = namedtuple("Free", ['odds', 'code', 'name'])
 ToProvider = namedtuple("ToProvider", ['odds', 'code', 'name'])
 ToCustomer = namedtuple("ToCustomer", ['odds', 'code', 'name'])
 """
-## Instantiation for the class variable, lets start thinking this odds will be
-inmutable, thats why i stored them in a namedtuple,  want to keep this data
+## Instantiation for the class variable, lets start thinking the odds will be
+inmutable, thats why I stored them in a namedtuple,  want to keep this data
 structure tight, quick and dirty again.
 """
 free = Free(6,0,'free') # this means 6/100 chances to change to --> ToProvider state
@@ -127,8 +126,8 @@ class Worker():
 
 class Step():
     """
-    This is 1 to 1 wrapper to a Worker, not only for semantics, a Silumation
-    has Steps not workers, but also for adding the initial step data like
+    1 to 1 wrapper to a Worker, not only for semantics, a Silumation
+    has Steps not Workers, but also for adding the initial step data like
     start_date.
     The start_date is the reference date from which next step is processed
     Worker instance is manipulated from Step too.
@@ -146,12 +145,12 @@ class Step():
 
     def full_qualified_id(self):
         """
-        This is the full qualified id, that we will use as key on
-        redis(GEOADD).
-        **Note add a day reference to this, This way web can manage Courier
-        data in redis like a session. Lets see which is the best format for
-        this get_current_day() first class function is for this. Consider also
-        adding this function as a class member.
+        Full qualified id, that we will use as key on redis(GEOADD).
+        **Note
+        Maybe is a good idea to add a day reference to this, This way web
+        can manage Courier data in redis like a session. Lets see which is
+        the best format for this get_current_day() first class function is
+        for this. Consider also adding this function as a class member.
         """
         return "{city}:{worker_id}:{task_id}".format(**self.to_dict())
 
@@ -188,18 +187,17 @@ class StepScheduler():
                 pass
 
 def io_coroutine(gen):
-    """This decorator, pumps the coroutine to the next step.
-    Starting the.
-    It is also a Ssyntactic sugar for identifying coroutines.
-    Which are much more clear now.
-    Registers the initiiliced coroutine for closing them when
+    """
+    This decorator, pumps the coroutine to the next step.
+    It is also a Syntactic sugar for identifying coroutines.
+    Which are much more visible now.
+    Registers the initiliced coroutine for closing them when
     the data flow ends, this is specially important, when
     opened file descriptors are involved, in this case we are
     sending data to a "with open" block, registering coroutines
-    allow us to kill them easyly with Simulator.en_io_coroutines()
+    allow us to kill them easyly with Simulator.end_io_coroutines()
     """
     def pumped(self, *args, **kwargs):
-        self.dbwriter = gen(self, *args, **kwargs)
         g = gen(self, *args, **kwargs)
         self.io_coroutines.append(g)
         next(g)
@@ -209,9 +207,9 @@ def io_coroutine(gen):
 class Simulation():
     """
     This is the main class of this script. It configures the simulation, starts
-    the necesary coroutines, and starts the scheduler in which theare are
-    stored the main generator(freezed), generator that triggers each coroutine
-    when required. Add More ...
+    the necesary coroutines, and starts the scheduler. In the schedulers queue
+    are stored the main generator(freezed), generator that triggers each
+    coroutine when required. Add More ...
     """
     def __init__(self, sim_type, nworkers, hours_shift, speed, transmit_rate,
                      is_json, is_pretty, start_date=None, database=None):
@@ -317,7 +315,8 @@ class Simulation():
             if isinstance(worker.current_state, Free):
                 worker.task_id = next_task_id()
             if isinstance(worker.current_state, ToCustomer):
-                """This means next state is free
+                """
+                This means next state is free
                 task id zero will be the representation of a free of duty
                 courier
                 Maybe its better to put a string like "FREE for that"
