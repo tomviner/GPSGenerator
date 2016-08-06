@@ -194,14 +194,13 @@ class Simulation():
     stored the main generator(freezed), generator thar triggers each coroutine
     when required. Add More ...
     """
-    def __init__(self, sim_type, nworkers, h_per_shift, speed, transmit_rate,
+    def __init__(self, sim_type, nworkers, hours_shift, speed, transmit_rate,
                      is_json, is_pretty, start_date=None, database=None):
         self.sim_type = sim_type
         self.nworkers = nworkers
-        self.h_per_shift = h_per_shift
+        self.hours_shift = hours_shift
         self.speed = speed
         self.transmit_rate = transmit_rate
-        self.rate = datetime.timedelta(seconds=transmit_rate)
         self.is_json = is_json
         self.is_pretty = is_pretty
         self.start_date = start_date
@@ -233,6 +232,10 @@ class Simulation():
                 coro.send(None)
             except StopIteration:
                 pass
+    
+    @property
+    def rate(self):
+        return datetime.timedelta(seconds=self.transmit_rate)
 
     @property
     def starts(self):
@@ -310,7 +313,7 @@ class Simulation():
             worker.switch_state()
 
     def process_step_timeline(self, step, city):
-        for _ in range(0, int(self.h_per_shift * 60*60 / self.transmit_rate)):
+        for _ in range(0, int(self.hours_shift * 60*60 / self.transmit_rate)):
             """
             Explain this in a propper way...
             """
@@ -385,11 +388,11 @@ if __name__ == "__main__":
                              "Unit: m/s\n"
                              "Default: %(default)s m/s")
 
-    parser.add_argument("-hs", "--h-per-shift",
+    parser.add_argument("-hs", "--hours-shift",
                         type=valid_hours,
                         default=24,
                         action="store",
-                        dest="h_per_shift",
+                        dest="hours_shift",
                         help="Hours per shift, the worker drives\n"
                              "Unit: int\n"
                              "Default: %(default)s")
@@ -448,7 +451,7 @@ if __name__ == "__main__":
 
     simulation = Simulation(args.sim_type,
                             args.nworkers,
-                            args.h_per_shift,
+                            args.hours_shift,
                             args.speed,
                             args.transmit_rate,
                             args.json,
