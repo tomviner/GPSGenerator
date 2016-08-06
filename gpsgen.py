@@ -342,16 +342,21 @@ class Simulation():
             self.next_step(step, self.rate)
 
     def start(self):
-        for carrier in range(0 , (self.nworkers * len(CITIES))):
-            city = next(city_switcher)
-            initial_w = Worker(next_worker_id(),
-                               city,
-                               CITIES[city]['initial_point'],
-                               0)
-            s = Step(initial_w, start_date=self.starts)
-            self.scheduler.new_step(self.process_step_timeline(s, city))
-        self.scheduler.run()
-        self.end_io_coroutines()
+        try:
+            for carrier in range(0 , (self.nworkers * len(CITIES))):
+                city = next(city_switcher)
+                initial_w = Worker(next_worker_id(),
+                                city,
+                                CITIES[city]['initial_point'],
+                                0)
+                s = Step(initial_w, start_date=self.starts)
+                self.scheduler.new_step(self.process_step_timeline(s, city))
+            self.scheduler.run()
+            self.end_io_coroutines()
+        except (KeyboardInterrupt, SystemExit):
+            print("Closing all files properly....")
+            self.end_io_coroutines()
+            print("Files closed.")
 
 #helperS
 def default_date():
