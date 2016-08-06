@@ -44,6 +44,7 @@ I thought that python generators, coroutines and a scheduler were the most aprop
 Performance Issues
 --------------------------- 
 I wanted a small memory footprint script, that is why I decided to do it with generators. On the one hand, the memory use is amazingly low. On the other hand, the cpu use is very intensive, something very normal in this kind of scripts(python).
+
 Edit** I found something remarkable, once coroutines are created, and testing it with a contant flow of generated data. Memory footprint of the all machinery goes stable, constant in 443,76MBytes, due to the big dataflow stream is generating, this is beyond all my expectations!
 
 Speed Issues
