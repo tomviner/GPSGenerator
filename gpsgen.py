@@ -5,6 +5,7 @@ import random, time, json
 import argparse
 from argparse import RawTextHelpFormatter
 import time
+from functools import wraps
 
 import numpy as np
 import pyproj
@@ -186,12 +187,30 @@ class StepScheduler():
             except StopIteration:
                 pass
 
+def io_coroutine(gen):
+    """This decorator, pumps the coroutine to the next step.
+    Starting the.
+    It is also a Ssyntactic sugar for identifying coroutines.
+    Which are much more clear now.
+    Registers the initiiliced coroutine for closing them when
+    the data flow ends, this is specially important, when
+    opened file descriptors are involved, in this case we are
+    sending data to a "with open" block, registering coroutines
+    allow us to kill them easyly with Simulator.en_io_coroutines()
+    """
+    def pumped(self, *args, **kwargs):
+        self.dbwriter = gen(self, *args, **kwargs)
+        g = gen(self, *args, **kwargs)
+        self.io_coroutines.append(g)
+        next(g)
+        return g
+    return pumped
 
 class Simulation():
     """
     This is the main class of this script. It configures the simulation, starts
     the necesary coroutines, and starts the scheduler in which theare are
-    stored the main generator(freezed), generator thar triggers each coroutine
+    stored the main generator(freezed), generator that triggers each coroutine
     when required. Add More ...
     """
     def __init__(self, sim_type, nworkers, hours_shift, speed, transmit_rate,
@@ -205,26 +224,17 @@ class Simulation():
         self.is_pretty = is_pretty
         self.start_date = start_date
         self.ends = None
-        self.database = database 
+        self.database = database
         self.scheduler = StepScheduler()
         self.io_coroutines = []
         self.instantiate_coroutines()
 
     def instantiate_coroutines(self):
         if self.is_json_file:
-            self.filewriter = self.file_writer_to_json_coro()
+            self.filewriter = self.file_writer_to_json()
         else:
-            self.filewriter = self.file_writer_coro()
-        self.dbwriter = self.send_to_db_coro()
-        self.io_coroutines.extend([self.filewriter, self.dbwriter])
-
-    def start_coroutines(self):
-        if self.sim_type in ["file","both"]:
-            """Initialize filewriter coro"""
-            next(self.filewriter)
-        if self.sim_type in ['live','both']:
-            """Initialize dbwriter coro"""
-            next(self.dbwriter)
+            self.filewriter = self.file_writer()
+        self.dbwriter = self.send_to_db()
 
     def end_io_coroutines(self):
         for coro in self.io_coroutines:
@@ -232,7 +242,7 @@ class Simulation():
                 coro.send(None)
             except StopIteration:
                 pass
-    
+
     @property
     def rate(self):
         return datetime.timedelta(seconds=self.transmit_rate)
@@ -258,7 +268,8 @@ class Simulation():
         return {'metadata': self.metadata,
                 'data': []}
 
-    def send_to_db_coro(self):
+    @io_coroutine
+    def send_to_db(self):
         while True:
             data = yield
             if data is None:
@@ -269,7 +280,8 @@ class Simulation():
             values = (lon, lat, t)
             self.database.execute_command("GEOADD", key, *values)
 
-    def file_writer_coro(self):
+    @io_coroutine
+    def file_writer(self):
         with open('data.dat', 'wt') as f:
             while True:
                 line = yield
@@ -277,7 +289,8 @@ class Simulation():
                     break
                 print(str(line), file=f)
 
-    def file_writer_to_json_coro(self):
+    @io_coroutine
+    def file_writer_to_json(self):
         with open('data.json', 'w+') as f:
             json_object = self.produce_json_structure()
             while True:
@@ -329,7 +342,6 @@ class Simulation():
             self.next_step(step, self.rate)
 
     def start(self):
-        self.start_coroutines()
         for carrier in range(0 , (self.nworkers * len(CITIES))):
             city = next(city_switcher)
             initial_w = Worker(next_worker_id(),
@@ -340,7 +352,6 @@ class Simulation():
             self.scheduler.new_step(self.process_step_timeline(s, city))
         self.scheduler.run()
         self.end_io_coroutines()
-        
 
 #helperS
 def default_date():
