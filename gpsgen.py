@@ -354,7 +354,7 @@ class Simulation():
             self.scheduler.run()
             self.end_io_coroutines()
         except (KeyboardInterrupt, SystemExit):
-            print("Closing all files properly....")
+            print("\nClosing all files properly....")
             self.end_io_coroutines()
             print("Files closed.")
 
