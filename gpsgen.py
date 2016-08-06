@@ -6,6 +6,7 @@ import argparse
 from argparse import RawTextHelpFormatter
 import time
 from functools import wraps
+from distutils.version import StrictVersion
 
 import numpy as np
 import pyproj
@@ -458,6 +459,9 @@ if __name__ == "__main__":
         info = r.execute_command("INFO")
     except Exception:
         raise Exception("Be sure redis server is on, on port 6379")
+
+    if StrictVersion(info['redis_version']) < StrictVersion("3.2.0"):
+        raise Exception("GEO redis is available only from version '3.2.0'")
 
     simulation = Simulation(args.sim_type,
                             args.nworkers,
