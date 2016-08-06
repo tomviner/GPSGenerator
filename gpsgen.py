@@ -9,6 +9,7 @@ import time
 import numpy as np
 import pyproj
 import redis
+from redis.exceptions import ConnectionError
 
 
 Coord = namedtuple("Coord", ["lat","lon"])
@@ -193,29 +194,56 @@ class Simulation():
     stored the main generator(freezed), generator thar triggers each coroutine
     when required. Add More ...
     """
-    def __init__(self, sim_type, nworkers, h_per_shift, speed,
-                     transmit_rate, is_json, is_pretty, start_date=None,
-                     database=None):
+    def __init__(self, sim_type, nworkers, h_per_shift, speed, transmit_rate,
+                     is_json, is_pretty, start_date=None, database=None):
         self.sim_type = sim_type
         self.nworkers = nworkers
         self.h_per_shift = h_per_shift
         self.speed = speed
-        self.transmit_rate = transmit_rate # seconds int
-        self.rate = datetime.timedelta(seconds=transmit_rate) #datetime obj
-        self.is_json_file = any([is_json, is_pretty])
+        self.transmit_rate = transmit_rate
+        self.rate = datetime.timedelta(seconds=transmit_rate)
+        self.is_json = is_json
         self.is_pretty = is_pretty
-        if start_date is None:
-            self.starts = datetime.datetime.now()
-        else:
-            self.starts = start_date
+        self.start_date = start_date
         self.ends = None
+        self.database = database 
         self.scheduler = StepScheduler()
-        self.database = database # redis server
+        self.io_coroutines = []
+        self.instantiate_coroutines()
+
+    def instantiate_coroutines(self):
         if self.is_json_file:
             self.filewriter = self.file_writer_to_json_coro()
         else:
             self.filewriter = self.file_writer_coro()
         self.dbwriter = self.send_to_db_coro()
+        self.io_coroutines.extend([self.filewriter, self.dbwriter])
+
+    def start_coroutines(self):
+        if self.sim_type in ["file","both"]:
+            """Initialize filewriter coro"""
+            next(self.filewriter)
+        if self.sim_type in ['live','both']:
+            """Initialize dbwriter coro"""
+            next(self.dbwriter)
+
+    def end_io_coroutines(self):
+        for coro in self.io_coroutines:
+            try:
+                coro.send(None)
+            except StopIteration:
+                pass
+
+    @property
+    def starts(self):
+        if self.start_date is None:
+            return datetime.datetime.now()
+        else:
+            return self.start_date
+
+    @property
+    def is_json_file(self):
+        return any([self.is_json, self.is_pretty])
 
     @property
     def metadata(self):
@@ -238,10 +266,6 @@ class Simulation():
             values = (lon, lat, t)
             self.database.execute_command("GEOADD", key, *values)
 
-    def start_db_coro(self):
-            to_redis = self.send_to_db_coro()
-            return next(to_redis)
-
     def file_writer_coro(self):
         with open('data.dat', 'wt') as f:
             while True:
@@ -262,13 +286,6 @@ class Simulation():
                 f.write(json.dumps(json_object, indent=4))
             else:
                 f.write(json.dumps(json_object))
-
-    def end_coroutines(self, coros):
-        for coro in coros:
-            try:
-                coro.send(None)
-            except StopIteration:
-                pass
 
     def next_step(self, step, timeIncrement):
         worker = step.worker
@@ -309,12 +326,7 @@ class Simulation():
             self.next_step(step, self.rate)
 
     def start(self):
-        if self.sim_type in ["file","both"]:
-            """Initialize filewriter coro"""
-            next(self.filewriter)
-        if self.sim_type in ['live','both']:
-            """Initialize dbwriter coro"""
-            next(self.dbwriter)
+        self.start_coroutines()
         for carrier in range(0 , (self.nworkers * len(CITIES))):
             city = next(city_switcher)
             initial_w = Worker(next_worker_id(),
@@ -324,7 +336,7 @@ class Simulation():
             s = Step(initial_w, start_date=self.starts)
             self.scheduler.new_step(self.process_step_timeline(s, city))
         self.scheduler.run()
-        self.end_coroutines([self.filewriter, self.dbwriter])
+        self.end_io_coroutines()
         
 
 #helperS
@@ -428,7 +440,11 @@ if __name__ == "__main__":
         msg = "Choose between --json or --pretty-json, not both"
         raise argparse.ArgumentTypeError(msg)
 
-    r = redis.StrictRedis(host='localhost', port=6379, db=0)
+    try:
+        r = redis.StrictRedis(host='localhost', port=6379, db=0)
+        info = r.execute_command("INFO")
+    except Exception:
+        raise Exception("Be sure redis server is on, on port 6379")
 
     simulation = Simulation(args.sim_type,
                             args.nworkers,
