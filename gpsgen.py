@@ -276,7 +276,7 @@ class Simulation():
                 break
             key = data.full_qualified_id()
             lon, lat = data.worker.coord
-            t = str(time.time())
+            t = data.time.timestamp()
             values = (lon, lat, t)
             self.database.execute_command("GEOADD", key, *values)
 
