@@ -187,3 +187,32 @@ Speed Issues
 ------------------
 This script generates a really big stream. I decided to implemente this generator and scheduler trick, to simulate some "concurrency", and have thorough control of the simulation, in one thread. That is why this script goes slow.
 
+
+Extending to new cities 
+-----------------------------
+You need to find the city tag in http://epsg.io/4901    (Paris)
+and extend the dictionary is harcoded in the begining of the script
+
+::
+  CITIES = {
+          "LON": {
+              "name": "LONDON",
+              "initial_point": Coord(-0.1202201, 51.517235),
+              "proj_map": "epsg:27700"
+          },
+          "MAD": {
+              "name": "MADRID",
+              "initial_point": Coord(-3.707429, 40.415369),
+              "proj_map": "epsg:2062"
+          },
+          "PAR": {
+              "name": "PARIS",
+              "initial_point": Coord(2.294479, 48.858231),
+              "proj_map": "epsg:4901"
+          }
+  }
+  
+
+
+
+
