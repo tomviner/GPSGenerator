@@ -194,7 +194,8 @@ You need to find the city tag in http://epsg.io/4901    (Paris)
 and extend the dictionary is harcoded in the begining of the script
 
 ::
-  CITIES = {
+
+    CITIES = {
           "LON": {
               "name": "LONDON",
               "initial_point": Coord(-0.1202201, 51.517235),
@@ -212,6 +213,8 @@ and extend the dictionary is harcoded in the begining of the script
           }
   }
   
+  
+
 
 
 
