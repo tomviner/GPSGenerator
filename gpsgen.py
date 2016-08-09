@@ -363,6 +363,34 @@ def default_date():
     return  datetime.datetime.now()
 
 # Validators
+def int_positive_workers(s):
+    n = int(s)
+    if n < 1:
+        msg = "Worker number need to be positive integer, 1 or bigger'"
+        raise argparse.ArgumentTypeError(msg)
+    return n
+
+def float_worker_speed(s):
+    n = float(s)
+    if n < 1:
+        msg = "Worker speed must be positive float, 1.0 or bigger'"
+        raise argparse.ArgumentTypeError(msg)
+    return n
+
+def int_valid_hours(s):
+    hours = int(s)
+    if hours not in range(1,25):
+        msg = "Hours must be between 1 and 24"
+        raise argparse.ArgumentTypeError(msg)
+    return hours
+
+def int_transmit_rate(s):
+    secs = int(s)
+    if secs not in range(5,61):
+        msg = "Tansmit rate should be between 5 sec and 60 sec"
+        raise argparse.ArgumentTypeError(msg)
+    return secs
+
 def valid_date(s):
     try:
         date = datetime.datetime.strptime(s, "%Y-%m-%d")
@@ -370,13 +398,6 @@ def valid_date(s):
     except ValueError:
         msg = "Not a valid date: '{0}'.".format(s)
         raise argparse.ArgumentTypeError(msg)
-
-def valid_hours(s):
-    hours = int(s)
-    if not (1 <= hours <= 24):
-        msg = "Hours must be between 1 and 24"
-        raise argparse.ArgumentTypeError(msg)
-    return hours
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="gpsgen",
@@ -387,7 +408,7 @@ if __name__ == "__main__":
                         help="Select a type of simulation to execute\n")
 
     parser.add_argument("-nw", "--nworkers",
-                        type=int,
+                        type=int_positive_workers,
                         default=600,
                         action="store",
                         dest="nworkers",
@@ -396,7 +417,7 @@ if __name__ == "__main__":
                              "Default: %(default)s")
 
     parser.add_argument("-s", "--speed",
-                        type=float,
+                        type=float_worker_speed,
                         default=13.8,
                         action="store",
                         dest="speed",
@@ -405,7 +426,7 @@ if __name__ == "__main__":
                              "Default: %(default)s m/s")
 
     parser.add_argument("-hs", "--hours-shift",
-                        type=valid_hours,
+                        type=int_valid_hours,
                         default=24,
                         action="store",
                         dest="hours_shift",
@@ -414,7 +435,7 @@ if __name__ == "__main__":
                              "Default: %(default)s")
 
     parser.add_argument("-tr", "--transmit-rate",
-                        type=int,
+                        type=int_transmit_rate,
                         default=15,
                         action="store",
                         dest="transmit_rate",
