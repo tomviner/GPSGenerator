@@ -100,7 +100,7 @@ class Worker():
         self.current_state = state
         self.task_id = task_id
         self.speed = np.array((0,0))
-        self.mapConvert = MapProj[self.city]
+        self.map_convert = MapProj[self.city]
         self.trigger_state_generator()
 
 
@@ -302,16 +302,16 @@ class Simulation():
             else:
                 f.write(json.dumps(json_object))
 
-    def next_step(self, step, timeIncrement):
+    def next_step(self, step, time_increment):
         worker = step.worker
         worker.speed = np.array((random.uniform(-(self.speed),self.speed),
                                 random.uniform(-(self.speed),self.speed)))
         lon, lat = worker.coord
-        position = np.array(worker.mapConvert(lon, lat))
-        position += worker.speed * (timeIncrement.total_seconds())
-        lon, lat = worker.mapConvert(position[0], position[1], inverse = True)
+        position = np.array(worker.map_convert(lon, lat))
+        position += worker.speed * (time_increment.total_seconds())
+        lon, lat = worker.map_convert(position[0], position[1], inverse = True)
         worker.coord = Coord(lon, lat)
-        step.time += timeIncrement
+        step.time += time_increment
         if worker.current_state.odds >= random.randint(1,100):
             if isinstance(worker.current_state, Free):
                 worker.task_id = next_task_id()
