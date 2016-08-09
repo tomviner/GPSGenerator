@@ -7,7 +7,6 @@ import random, time, json
 import argparse
 from argparse import RawTextHelpFormatter
 from distutils.version import StrictVersion
-import threading
 
 import numpy as np
 import pyproj
