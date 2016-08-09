@@ -7,6 +7,7 @@ import random, time, json
 import argparse
 from argparse import RawTextHelpFormatter
 from distutils.version import StrictVersion
+import threading
 
 import numpy as np
 import pyproj
@@ -213,12 +214,13 @@ class Simulation():
     coroutine when required. Add More ...
     """
     def __init__(self, sim_type, nworkers, hours_shift, speed, transmit_rate,
-                     is_json, is_pretty, start_date=None, database=None):
+                 is_bulk, is_json, is_pretty, start_date=None, database=None):
         self.sim_type = sim_type
         self.nworkers = nworkers
         self.hours_shift = hours_shift
         self.speed = speed
         self.transmit_rate = transmit_rate
+        self.is_bulk = is_bulk
         self.is_json = is_json
         self.is_pretty = is_pretty
         self.start_date = start_date
@@ -330,12 +332,19 @@ class Simulation():
             """
             Explain this in a propper way...
             """
-            if self.sim_type == "live":
+            now = datetime.datetime.now()
+            if self.sim_type in ['to_db', 'both'] and not (self.is_bulk):
+                diff = step.time - now
+                diff = diff.seconds
+                if step.time.timestamp() > now.timestamp():
+                    time.sleep(diff)
+
+            if self.sim_type == "to_db":
                 self.dbwriter.send(step)
-            if self.sim_type == "file":
-                self.filewriter.send(step)
             if self.sim_type == "both":
                 self.dbwriter.send(step)
+                self.filewriter.send(step)
+            if self.sim_type == "file":
                 self.filewriter.send(step)
             yield
             step.worker.city = city
@@ -404,7 +413,7 @@ if __name__ == "__main__":
                                      description="GPS Stream generator",
                                      formatter_class=RawTextHelpFormatter)
     parser.add_argument("sim_type",
-                        choices=['live', 'file', 'both'],
+                        choices=['to_db', 'file', 'both'],
                         help="Select a type of simulation to execute\n")
 
     parser.add_argument("-nw", "--nworkers",
@@ -452,6 +461,12 @@ if __name__ == "__main__":
                              "Format: YYYY-MM-DD\n"
                              "Default: NOW")
 
+    parser.add_argument("-b", "--bulk",
+                        default=False,
+                        action="store_true",
+                        help="Bulk process to database\n")
+
+
     parser.add_argument("-j", "--json",
                         default=False,
                         action="store_true",
@@ -467,13 +482,13 @@ if __name__ == "__main__":
 
     parser.add_argument("--version",
                         action="version",
-                        version='%(prog)s 0.1.0')
+                        version='%(prog)s 0.2.0')
 
 
     args = parser.parse_args()
 
-    if args.sim_type == "live" and (args.json or args.pretty):
-        msg = "Live simulation and json flag is not compatible"
+    if args.sim_type == "to_db" and (args.json or args.pretty):
+        msg = "'To database' simulation and json flag is not compatible"
         raise argparse.ArgumentTypeError(msg)
 
     if args.json and args.pretty:
@@ -494,6 +509,7 @@ if __name__ == "__main__":
                             args.hours_shift,
                             args.speed,
                             args.transmit_rate,
+                            args.bulk,
                             args.json,
                             args.pretty,
                             start_date=args.start_date,

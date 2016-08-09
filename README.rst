@@ -63,45 +63,51 @@ Script use
 
 ::
 
-    $ python gpsgen.py --help
-    usage: gpsgen [-h] [-nw NWORKERS] [-s SPEED] [-hs HOURS_SHIFT]
-              [-tr TRANSMIT_RATE] [-d START_DATE] [-j] [-pj] [--version]
-              {live,file,both}
 
-    GPS Stream generator
+   $ ./gpsgen.py --help
+   usage: gpsgen [-h] [-nw NWORKERS] [-s SPEED] [-hs HOURS_SHIFT]
+           [-tr TRANSMIT_RATE] [-d START_DATE] [-b] [-j] [-pj] [--version]
+           {to_db,file,both}
 
-    positional arguments:
-      {live,file,both}      Select a type of simulation to execute
+   GPS Stream generator
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      -nw NWORKERS, --nworkers NWORKERS
-                        Number of Workers per city.
-                        Unit: int
-                        Default: 600
-      -s SPEED, --speed SPEED
-                        Speed workers are continously moving
-                        Unit: m/s
-                        Default: 13.8 m/s
-      -hs HOURS_SHIFT, --hours-shift HOURS_SHIFT
-                        Hours per shift, the worker drives
-                        Unit: int
-                        Default: 24
-      -tr TRANSMIT_RATE, --transmit-rate TRANSMIT_RATE
-                        GPS tracking transmit rate in seconds
-                        Unit: seconds
-                        Default: 15 s
-      -d START_DATE, --start-date START_DATE
-                        Start date for the simulation
-                        Format: YYYY-MM-DD
-                        Default: NOW
-      -j, --json            Write the file in json format compressed
-      -pj, --pretty-json    Write the file in json format
-                        Indented 4 spaces
-      --version             show program's version number and exit
+   positional arguments:
+   {to_db,file,both}     Select a type of simulation to execute
+
+   optional arguments:
+   -h, --help            show this help message and exit
+   -nw NWORKERS, --nworkers NWORKERS
+                           Number of Workers per city.
+                           Unit: int_positive_workers
+                           Default: 600
+   -s SPEED, --speed SPEED
+                           Speed workers are continously moving
+                           Unit: m/s
+                           Default: 13.8 m/s
+   -hs HOURS_SHIFT, --hours-shift HOURS_SHIFT
+                           Hours per shift, the worker drives
+                           Unit: int
+                           Default: 24
+   -tr TRANSMIT_RATE, --transmit-rate TRANSMIT_RATE
+                           GPS tracking transmit rate in seconds
+                           Unit: seconds
+                           Default: 15 s
+   -d START_DATE, --start-date START_DATE
+                           Start date for the simulation
+                           Format: YYYY-MM-DD
+                           Default: NOW
+   -b, --bulk            Bulk process to database
+   -j, --json            Write the file in json format compressed
+   -pj, --pretty-json    Write the file in json format
+                           Indented 4 spaces
+   --version             show program's version number and exit
+        
 
 
-Basically there are three ways to run the script [live | file | both ] 
+
+Basically there are three ways to run the script [to_db | file | both ] 
+
+We can trigger the simulator in bluk mode if we pass the flag --bulk, it will have impact in the cpu
 
 If a file in involved, it can be generated in three ways [ sequential | json | pretty-json ] data.dat and data.json respectively 
 
@@ -164,14 +170,18 @@ cat data.data | grep LON:12:936     <- this means filter the LONDON worker with
   [<STEP> for LON:12:936] [<ACTION>:ToCustomer(odds=2, code=2, name='to_customer')] [<COORD>:Coord(lat=-0.17103763117067008, lon=51.576543788428765)] [<TIME>: 2016-08-08 12:09:04.509922]
   [<STEP> for LON:12:936] [<ACTION>:ToCustomer(odds=2, code=2, name='to_customer')] [<COORD>:Coord(lat=-0.1733063261793463, lon=51.576370048491505)] [<TIME>: 2016-08-08 12:09:19.509922]
 
-The live mod writes directly the dataset in redis
+The live mod writes directly the dataset in redis  
+
 More examples:
 ::
     python gpsgen.py both --json -nw 300 -hs 8
-        live stream to redin AND write a json file , Number of workers per city: 300, hours per shift 8
+        Live stream to redins AND write a json file , Number of workers per city: 300, hours per shift 8
         
-    python gpsgen.py live --transmit-rate 20 -nw 600 --hours-shift 10
-        live stream to redis at a transmit rate of 20s , Number of workers per city: 600, hours per shift 10 
+    python gpsgen.py to_db --transmit-rate 20 -nw 600 --hours-shift 10
+        Live stream to redis at a transmit rate of 20s , Number of workers per city: 600, hours per shift 10 
+        
+    python gpsgen.py to_db --bulk --transmit-rate 20 -nw 600 --hours-shift 10
+        Bulk stream to redis at a transmit rate of 20s , Number of workers per city: 600, hours per shift 10 
 
 Why not TDD
 -------------------
@@ -181,7 +191,9 @@ Performance Issues
 --------------------------- 
 I wanted a small memory footprint script, that is why I decided to do it with generators. On the one hand, the memory use is amazingly low. On the other hand, the cpu use is very intensive, something very normal in this kind of scripts(python).
 
-Edit** I found something remarkable, once coroutines are created, and testing it with a contant flow of generated data. Memory footprint of the all machinery goes stable, constant in 24,8 MB, due to the big dataflow stream is generating, this is beyond all my expectations!
+Edit** I found something remarkable, once coroutines are created, and testing it with a contant flow of generated data. Memory footprint of the all machinery goes stable, constant in 24,8 MB, due to the big dataflow stream is generating, this is beyond all my expectations!  
+
+Edit2** Ok, BIG ARCHIEVEMENT !!!! If we run the script, in live mode, './gpsgen.py to_db' without passing --bulk flag ... Now the script generates the stream in real time simulation way. This Big thing here is that with the corresponding wait of every step, the CPU is not affected. **So, what we have here in 'to_db/live' mod, is a script with no memory impact(it is constant), no cpu impact, and we can run it forever, I mean FOREVER!!!**
 
 Speed Issues
 ------------------
