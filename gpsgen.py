@@ -494,14 +494,17 @@ if __name__ == "__main__":
         msg = "Choose between --json or --pretty-json, not both"
         raise argparse.ArgumentTypeError(msg)
 
-    try:
-        r = redis.StrictRedis(host='localhost', port=6379, db=0)
-        info = r.execute_command("INFO")
-    except Exception:
-        raise Exception("Be sure redis server is on, on port 6379")
+    if args.sim_type in ["to_db", "both"]:
+        try:
+            r = redis.StrictRedis(host='localhost', port=6379, db=0)
+            info = r.execute_command("INFO")
+        except Exception:
+            raise Exception("Be sure redis server is on, on port 6379")
 
-    if StrictVersion(info['redis_version']) < StrictVersion("3.2.0"):
-        raise Exception("GEO redis is available only from version '3.2.0'")
+        if StrictVersion(info['redis_version']) < StrictVersion("3.2.0"):
+            raise Exception("GEO redis is available only from version '3.2.0'")
+    else:
+        r = None
 
     simulation = Simulation(args.sim_type,
                             args.nworkers,
