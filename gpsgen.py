@@ -123,8 +123,7 @@ class Worker():
         return self.coord
 
     def __str__(self):
-        s = "{city} -> {worker_id} {task_id} {coord}"
-        return s.format(**self.__dict__)
+        return "{0.city} -> {0.worker_id} {0.task_id} {0.coord}".format(self)
 
 
 class Step():
@@ -201,12 +200,12 @@ def io_coroutine(gen):
     allow us to kill them easyly with Simulator.end_io_coroutines()
     """
     @functools.wraps(gen)
-    def wrapper(self, *args, **kwargs):
+    def pumped(self, *args, **kwargs):
         g = gen(self, *args, **kwargs)
         self.io_coroutines.append(g)
         next(g)
         return g
-    return wrapper
+    return pumped
 
 
 class Simulation():
@@ -333,7 +332,8 @@ class Simulation():
     def process_step_timeline(self, step, city):
         for _ in range(0, int(self.hours_shift * 60*60 / self.transmit_rate)):
             """
-            This is the main funtion, that controls the data flow,
+            This is the main generator funtion(its a two step generator), that
+            controls the data flow.
             From here we map different simulation types to coroutines
             From here we can start thinking in "data flow programming"
             We can also, instead of sending the data directly to a coroutine
