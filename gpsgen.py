@@ -333,7 +333,11 @@ class Simulation():
     def process_step_timeline(self, step, city):
         for _ in range(0, int(self.hours_shift * 60*60 / self.transmit_rate)):
             """
-            Explain this in a propper way...
+            This is the main funtion, that controls the data flow,
+            From here we map different simulation types to coroutines
+            From here we can start thinking in "data flow programming"
+            We can also, instead of sending the data directly to a coroutine
+            endpoint, we can start a coroutine pipeline.(not implemented)
             """
             now = datetime.datetime.now()
             if self.sim_type in ['to_db', 'both'] and not (self.is_bulk):
@@ -362,6 +366,34 @@ class Simulation():
                                    CITIES[city]['initial_point'],
                                    0)
                 s = Step(initial_w, start_date=self.starts)
+                """
+                This is important.
+
+                Here is where the main scheduler queue is feeded.
+                I decided to use clone-workers all the time, but we can append
+                different profiles of workers. For example a slower one, or
+                we can change the starting coordinates of a certain worker.
+
+                When the generator is started, all the data flow evolves from
+                the first object we pass, lets call it the "SEED".
+
+                The schedulers queue is a NWORKERS -1 long.
+                We fill the queue with freezed generators(SEEDS), waiting
+                for next step.
+                (It is NWORKERS -1 because we dont care about step 0)
+
+                Depending on the first SEED we append to the scheduler, data
+                generated from there, will be conditioned to that SEED.
+
+                I decided to use the same worker all the time. But the
+                possibilities are endless here.
+
+                Depending how we programm the STATE state_machine change in
+                Worker class it can alter the behavior. I did a silly dice roll
+                with a random. Its posible to do it in a more acurate way.
+
+                next_step() function handles this forwarding step.
+                """
                 self.scheduler.new_step(self.process_step_timeline(s, city))
             self.scheduler.run()
             self.end_io_coroutines()
