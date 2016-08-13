@@ -164,10 +164,12 @@ class Step():
 
     def __str__(self):
         step_data = (self.full_qualified_id(),
-                     self.worker.current_state,
-                     self.worker.coord,
+                     self.worker.current_state.name,
+                     self.worker.coord.lat,
+                     self.worker.coord.lon,
                      self.time)
-        f_string = "[<STEP> for {}] [<STATE>:{}] [<COORD>:{}] [<TIME>: {}]"
+        f_string = "[<STEP> for {:>15}] [<STATE>:{:>15}]" \
+                   "[<COORD>:[{:>20}, {:<25}] [<TIME>: {}]"
         return f_string.format(*step_data)
 
 
