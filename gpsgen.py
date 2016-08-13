@@ -3,18 +3,20 @@ import sys
 from itertools import cycle, count
 import datetime
 from collections import namedtuple, deque
-import random, time, json
+import random
+import time
+import json
 import argparse
+import functools
 from argparse import RawTextHelpFormatter
 from distutils.version import StrictVersion
 
 import numpy as np
 import pyproj
 import redis
-from redis.exceptions import ConnectionError
 
 
-Coord = namedtuple("Coord", ["lat","lon"])
+Coord = namedtuple("Coord", ["lat", "lon"])
 
 CITIES = {
         "LON": {
@@ -44,13 +46,14 @@ city_switcher = cycle(CITIES.keys())
 def next_worker_id():
     return next(worker_sequence)
 
+
 def next_task_id():
     return next(task_sequence)
 
+
 def get_current_day():
     today = datetime.date.today()
-    return "{}{:02d}{:02d}".format(today.year,today.month,today.day)
-
+    return "{0:%Y}{0:%m}{0:%d}".format(today)
 
 
 """
@@ -60,6 +63,7 @@ Task = namedtuple("Task", ['task_id'])
 **Note currently not using this, if we dont need no sync to a real database,
 lets keep this, unused.
 """
+
 
 class Task():
     def __init__(self):
@@ -78,9 +82,12 @@ ToCustomer = namedtuple("ToCustomer", ['odds', 'code', 'name'])
 inmutable, thats why I stored them in a namedtuple,  want to keep this data
 structure tight, quick and dirty again.
 """
-free = Free(6,0,'free') # this means 6/100 chances to change to --> ToProvider state
-to_provider = ToProvider(2,1,'to_provider') # 2/100 chances to change to --> ToCustomer state
-to_customer = ToCustomer(2,2,'to_customer') # 2/100 chances to change to --> Free state
+# this means 6/100 chances to change to --> ToProvider state
+free = Free(6, 0, 'free')
+# 2/100 chances to change to --> ToCustomer state
+to_provider = ToProvider(2, 1, 'to_provider')
+# 2/100 chances to change to --> Free state
+to_customer = ToCustomer(2, 2, 'to_customer')
 
 
 class Worker():
@@ -99,30 +106,25 @@ class Worker():
         self.state_machine = cycle(self.states)
         self.current_state = state
         self.task_id = task_id
-        self.speed = np.array((0,0))
+        self.speed = np.array((0, 0))
         self.map_convert = MapProj[self.city]
         self.trigger_state_generator()
-
-
-    def _get_id(self):
-        return self.worker_id
 
     def trigger_state_generator(self):
         """
         Just semantic alias to start the generator(cycle)
         """
         self.current_state = next(self.state_machine)
-        return
 
     def switch_state(self):
         self.current_state = next(self.state_machine)
-        return
 
     def get_position(self):
         return self.coord
 
     def __str__(self):
-        return "{city} -> {worker_id} {task_id} {coord}".format(**vars(self))
+        s = "{city} -> {worker_id} {task_id} {coord}"
+        return s.format(**self.__dict__)
 
 
 class Step():
@@ -133,13 +135,12 @@ class Step():
     The start_date is the reference date from which next step is processed
     Worker instance is manipulated from Step too.
     """
-    def __init__(self, worker,start_date=None):
+    def __init__(self, worker, start_date=None):
         self.worker = worker
         if start_date is not None:
             self.time = start_date
         else:
             self.time = datetime.datetime.now()
-
 
     def to_dict(self):
         return vars(self.worker)
@@ -163,10 +164,10 @@ class Step():
                 }
 
     def __str__(self):
-        step_data  =  (self.full_qualified_id(),
-                       self.worker.current_state,
-                       self.worker.coord,
-                       self.time)
+        step_data = (self.full_qualified_id(),
+                     self.worker.current_state,
+                     self.worker.coord,
+                     self.time)
         f_string = "[<STEP> for {}] [<ACTION>:{}] [<COORD>:{}] [<TIME>: {}]"
         return f_string.format(*step_data)
 
@@ -187,6 +188,7 @@ class StepScheduler():
             except StopIteration:
                 pass
 
+
 def io_coroutine(gen):
     """
     This decorator, pumps the coroutine to the next step.
@@ -198,12 +200,14 @@ def io_coroutine(gen):
     sending data to a "with open" block, registering coroutines
     allow us to kill them easyly with Simulator.end_io_coroutines()
     """
-    def pumped(self, *args, **kwargs):
+    @functools.wraps(gen)
+    def wrapper(self, *args, **kwargs):
         g = gen(self, *args, **kwargs)
         self.io_coroutines.append(g)
         next(g)
         return g
-    return pumped
+    return wrapper
+
 
 class Simulation():
     """
@@ -256,7 +260,7 @@ class Simulation():
 
     @property
     def is_json_file(self):
-        return any([self.is_json, self.is_pretty])
+        return self.is_json or self.is_pretty
 
     @property
     def metadata(self):
@@ -305,15 +309,15 @@ class Simulation():
 
     def next_step(self, step, time_increment):
         worker = step.worker
-        worker.speed = np.array((random.uniform(-(self.speed),self.speed),
-                                random.uniform(-(self.speed),self.speed)))
+        worker.speed = np.array((random.uniform(-(self.speed), self.speed),
+                                 random.uniform(-(self.speed), self.speed)))
         lon, lat = worker.coord
         position = np.array(worker.map_convert(lon, lat))
         position += worker.speed * (time_increment.total_seconds())
-        lon, lat = worker.map_convert(position[0], position[1], inverse = True)
+        lon, lat = worker.map_convert(position[0], position[1], inverse=True)
         worker.coord = Coord(lon, lat)
         step.time += time_increment
-        if worker.current_state.odds >= random.randint(1,100):
+        if worker.current_state.odds >= random.randint(1, 100):
             if isinstance(worker.current_state, Free):
                 worker.task_id = next_task_id()
             if isinstance(worker.current_state, ToCustomer):
@@ -351,12 +355,12 @@ class Simulation():
 
     def start(self):
         try:
-            for carrier in range(0 , (self.nworkers * len(CITIES))):
+            for carrier in range(0, (self.nworkers * len(CITIES))):
                 city = next(city_switcher)
                 initial_w = Worker(next_worker_id(),
-                                city,
-                                CITIES[city]['initial_point'],
-                                0)
+                                   city,
+                                   CITIES[city]['initial_point'],
+                                   0)
                 s = Step(initial_w, start_date=self.starts)
                 self.scheduler.new_step(self.process_step_timeline(s, city))
             self.scheduler.run()
@@ -366,9 +370,11 @@ class Simulation():
             self.end_io_coroutines()
             sys.stdout.write("\nFiles closed.\n")
 
-#helperS
+
+# Helpers
 def default_date():
-    return  datetime.datetime.now()
+    return datetime.datetime.now()
+
 
 # Validators
 def int_positive_workers(s):
@@ -378,6 +384,7 @@ def int_positive_workers(s):
         raise argparse.ArgumentTypeError(msg)
     return n
 
+
 def float_worker_speed(s):
     n = float(s)
     if n < 1:
@@ -385,24 +392,27 @@ def float_worker_speed(s):
         raise argparse.ArgumentTypeError(msg)
     return n
 
+
 def int_valid_hours(s):
     hours = int(s)
-    if hours not in range(1,25):
+    if hours not in range(1, 25):
         msg = "Hours must be between 1 and 24"
         raise argparse.ArgumentTypeError(msg)
     return hours
 
+
 def int_transmit_rate(s):
     secs = int(s)
-    if secs not in range(5,61):
+    if secs not in range(5, 61):
         msg = "Tansmit rate should be between 5 sec and 60 sec"
         raise argparse.ArgumentTypeError(msg)
     return secs
 
+
 def valid_date(s):
     try:
         date = datetime.datetime.strptime(s, "%Y-%m-%d")
-        return date.replace(hour=8,minute=0)
+        return date.replace(hour=8, minute=0)
     except ValueError:
         msg = "Not a valid date: '{0}'.".format(s)
         raise argparse.ArgumentTypeError(msg)
@@ -465,7 +475,6 @@ if __name__ == "__main__":
                         action="store_true",
                         help="Bulk process to database\n")
 
-
     parser.add_argument("-j", "--json",
                         default=False,
                         action="store_true",
@@ -478,11 +487,9 @@ if __name__ == "__main__":
                         help="Write the file in json format\n"
                              "Indented 4 spaces\n")
 
-
     parser.add_argument("--version",
                         action="version",
                         version='%(prog)s 0.2.0')
-
 
     args = parser.parse_args()
 
