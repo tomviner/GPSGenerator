@@ -95,7 +95,7 @@ class Worker():
 
     def __init__(self, worker_id, city, coord, task_id, state='free'):
         """
-        In this proof of concept every Worker has a ACTION linked even if it
+        In this proof of concept every Worker has a STATE linked even if it
         is <Free>, as well as the a last coord, gps coordinates for displaying
         the last valid position for the worker.
         Speed is a vector np array it allow us to multiply matrixes
@@ -168,7 +168,7 @@ class Step():
                      self.worker.current_state,
                      self.worker.coord,
                      self.time)
-        f_string = "[<STEP> for {}] [<ACTION>:{}] [<COORD>:{}] [<TIME>: {}]"
+        f_string = "[<STEP> for {}] [<STATE>:{}] [<COORD>:{}] [<TIME>: {}]"
         return f_string.format(*step_data)
 
 
